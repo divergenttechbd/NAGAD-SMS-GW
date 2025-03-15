@@ -1,0 +1,179 @@
+definitions:
+  controllers.LoginRequest:
+    properties:
+      password:
+        type: string
+      username:
+        type: string
+    required:
+    - password
+    - username
+    type: object
+  controllers.RegisterRequest:
+    properties:
+      email:
+        type: string
+      password:
+        minLength: 8
+        type: string
+      username:
+        type: string
+    required:
+    - email
+    - password
+    - username
+    type: object
+  models.Campaign:
+    description: A marketing or messaging campaign associated with users
+    properties:
+      id:
+        type: integer
+      name:
+        description: Name is the name of the campaign
+        type: string
+      status:
+        description: Status represents the campaign status
+        type: string
+      user_id:
+        description: UserID is the ID of the user associated with the campaign
+        type: integer
+    type: object
+  models.Permission:
+    description: A permission assigned to roles
+    properties:
+      id:
+        type: integer
+      name:
+        description: |-
+          Name is the unique name of the permission
+          @Property name string true "Permission Name" example("view_users")
+        type: string
+    type: object
+  models.Role:
+    description: Role assigned to users with permissions
+    properties:
+      id:
+        type: integer
+      name:
+        description: |-
+          Name is the unique name of the role
+          @Property name string true "Role Name" example("admin")
+        type: string
+      permissions:
+        description: |-
+          Permissions represents the permissions assigned to the role
+          @Property permissions array "Permissions" items={Permission} example([{"id":1,"name":"view_users"}])
+        items:
+          $ref: '#/definitions/models.Permission'
+        type: array
+    type: object
+  models.User:
+    description: Represents a user in the system with roles and campaigns
+    properties:
+      campaigns:
+        description: Campaigns represents the campaigns associated with the user
+        items:
+          $ref: '#/definitions/models.Campaign'
+        type: array
+      email:
+        description: Email is the user's email address
+        type: string
+      id:
+        type: integer
+      roles:
+        description: Roles represents the roles assigned to the user
+        items:
+          $ref: '#/definitions/models.Role'
+        type: array
+      username:
+        description: Username is a unique identifier for the user
+        type: string
+    type: object
+info:
+  contact: {}
+  description: This is a sample server for My Project.
+  title: My Project API
+  version: "1.0"
+paths:
+  /auth/login:
+    post:
+      consumes:
+      - application/json
+      description: Login with username and password to get a JWT token
+      parameters:
+      - description: Login credentials
+        in: body
+        name: input
+        required: true
+        schema:
+          $ref: '#/definitions/controllers.LoginRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Returns a JWT token
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: Invalid input
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Invalid credentials
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal server error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Authenticate a user
+      tags:
+      - auth
+  /auth/register:
+    post:
+      consumes:
+      - application/json
+      description: Create a new user with username, email, and password
+      parameters:
+      - description: User registration details
+        in: body
+        name: input
+        required: true
+        schema:
+          $ref: '#/definitions/controllers.RegisterRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Returns the created user
+          schema:
+            $ref: '#/definitions/models.User'
+        "400":
+          description: Invalid input
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal server error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Register a new user
+      tags:
+      - auth
+securityDefinitions:
+  BearerAuth:
+    in: header
+    name: Authorization
+    type: apiKey
+swagger: "2.0"
