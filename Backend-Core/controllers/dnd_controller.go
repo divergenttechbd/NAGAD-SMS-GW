@@ -16,7 +16,7 @@ import (
 // @Produce json
 // @Success 200 {array} models.DND
 // @Failure 500 {object} map[string]interface{}
-// @Router /dnds [get]
+// @Router /api/dnd [get]
 func GetDNDs(c *gin.Context) {
 	db := utils.GetDB()
 	var dnds []models.DND
@@ -39,7 +39,7 @@ func GetDNDs(c *gin.Context) {
 // @Success 201 {object} models.DND
 // @Failure 400 {object} map[string]interface{}
 // @Failure 500 {object} map[string]interface{}
-// @Router /dnd [post]
+// @Router /api/dnd [post]
 func CreateDND(c *gin.Context) {
 	var input map[string]interface{}
 
@@ -94,7 +94,7 @@ func CreateDND(c *gin.Context) {
 // @Failure 400 {object} map[string]interface{}
 // @Failure 404 {object} map[string]interface{}
 // @Failure 500 {object} map[string]interface{}
-// @Router /dnd/{id} [put]
+// @Router /api/dnd/{id} [put]
 func UpdateDND(c *gin.Context) {
 	var input map[string]interface{}
 
@@ -141,7 +141,7 @@ func UpdateDND(c *gin.Context) {
 // @Success 200 {object} map[string]interface{}
 // @Failure 404 {object} map[string]interface{}
 // @Failure 500 {object} map[string]interface{}
-// @Router /dnd/{id} [delete]
+// @Router /api/dnd/{id} [delete]
 func DeleteDND(c *gin.Context) {
 	dndID := c.Param("id")
 
@@ -170,7 +170,7 @@ func DeleteDND(c *gin.Context) {
 // @Param id path string true "DND ID"
 // @Success 200 {object} models.DND
 // @Failure 404 {object} map[string]interface{}
-// @Router /dnds/{id} [get]
+// @Router /api/dnd/{id} [get]
 func GetDNDDetails(c *gin.Context) {
 	dndID := c.Param("id")
 

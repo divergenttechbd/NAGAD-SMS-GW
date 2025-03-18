@@ -361,6 +361,160 @@ info:
   title: My Project API
   version: "1.0"
 paths:
+  /api/dnd:
+    get:
+      consumes:
+      - application/json
+      description: Get all DND entries
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/models.DND'
+            type: array
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Get all DND entries
+      tags:
+      - DND
+    post:
+      consumes:
+      - application/json
+      description: Create a new DND entry with phone number, reason, and status
+      parameters:
+      - description: DND details
+        in: body
+        name: input
+        required: true
+        schema:
+          additionalProperties: true
+          type: object
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/models.DND'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Create a new DND entry
+      tags:
+      - DND
+  /api/dnd/{id}:
+    delete:
+      consumes:
+      - application/json
+      description: Delete a DND entry by ID
+      parameters:
+      - description: DND ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Delete an existing DND entry
+      tags:
+      - DND
+    get:
+      consumes:
+      - application/json
+      description: Get details of a DND entry by ID
+      parameters:
+      - description: DND ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.DND'
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Get DND details
+      tags:
+      - DND
+    put:
+      consumes:
+      - application/json
+      description: 'Update a DND entry by ID with optional fields: phone number, reason,
+        and status'
+      parameters:
+      - description: DND ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: DND details
+        in: body
+        name: input
+        required: true
+        schema:
+          additionalProperties: true
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.DND'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Update an existing DND entry
+      tags:
+      - DND
   /auth/login:
     post:
       consumes:
@@ -1020,162 +1174,6 @@ paths:
       summary: Get campaign workflow details
       tags:
       - Campaign Workflows
-  /dnd:
-    post:
-      consumes:
-      - application/json
-      description: Create a new DND entry with phone number, reason, and status
-      parameters:
-      - description: DND details
-        in: body
-        name: input
-        required: true
-        schema:
-          additionalProperties: true
-          type: object
-      produces:
-      - application/json
-      responses:
-        "201":
-          description: Created
-          schema:
-            $ref: '#/definitions/models.DND'
-        "400":
-          description: Bad Request
-          schema:
-            additionalProperties: true
-            type: object
-        "500":
-          description: Internal Server Error
-          schema:
-            additionalProperties: true
-            type: object
-      summary: Create a new DND entry
-      tags:
-      - DND
-  /dnd/{id}:
-    delete:
-      consumes:
-      - application/json
-      description: Delete a DND entry by ID
-      parameters:
-      - description: DND ID
-        in: path
-        name: id
-        required: true
-        type: string
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            additionalProperties: true
-            type: object
-        "404":
-          description: Not Found
-          schema:
-            additionalProperties: true
-            type: object
-        "500":
-          description: Internal Server Error
-          schema:
-            additionalProperties: true
-            type: object
-      summary: Delete an existing DND entry
-      tags:
-      - DND
-    put:
-      consumes:
-      - application/json
-      description: 'Update a DND entry by ID with optional fields: phone number, reason,
-        and status'
-      parameters:
-      - description: DND ID
-        in: path
-        name: id
-        required: true
-        type: string
-      - description: DND details
-        in: body
-        name: input
-        required: true
-        schema:
-          additionalProperties: true
-          type: object
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/models.DND'
-        "400":
-          description: Bad Request
-          schema:
-            additionalProperties: true
-            type: object
-        "404":
-          description: Not Found
-          schema:
-            additionalProperties: true
-            type: object
-        "500":
-          description: Internal Server Error
-          schema:
-            additionalProperties: true
-            type: object
-      summary: Update an existing DND entry
-      tags:
-      - DND
-  /dnds:
-    get:
-      consumes:
-      - application/json
-      description: Get all DND entries
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            items:
-              $ref: '#/definitions/models.DND'
-            type: array
-        "500":
-          description: Internal Server Error
-          schema:
-            additionalProperties: true
-            type: object
-      summary: Get all DND entries
-      tags:
-      - DND
-  /dnds/{id}:
-    get:
-      consumes:
-      - application/json
-      description: Get details of a DND entry by ID
-      parameters:
-      - description: DND ID
-        in: path
-        name: id
-        required: true
-        type: string
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/models.DND'
-        "404":
-          description: Not Found
-          schema:
-            additionalProperties: true
-            type: object
-      summary: Get DND details
-      tags:
-      - DND
   /mno:
     post:
       consumes:

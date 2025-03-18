@@ -89,6 +89,8 @@ func main() {
 		routes.SetupMNORoutes(apiRoutes)
 		routes.SetupDndRoutes(apiRoutes)
 		routes.SetupMsgPriorityRoutes(apiRoutes)
+		routes.SetupCampaignRecipientRoutes(apiRoutes)
+		routes.SetupCampaignWorkflowRoutes(apiRoutes)
 	}
 
 	// Swagger route (only if ENABLE_SWAGGER is true)
