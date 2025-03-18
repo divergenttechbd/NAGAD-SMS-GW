@@ -4,6 +4,7 @@ import (
 	"myproject/models"
 	"myproject/utils"
 	"net/http"
+	"time"
 
 	"github.com/gin-gonic/gin"
 )
@@ -24,9 +25,12 @@ func GetCampaigns(c *gin.Context) {
 // CreateCampaign creates a new campaign
 func CreateCampaign(c *gin.Context) {
 	var input struct {
-		Name   string `json:"name" binding:"required"`
-		Status string `json:"status" binding:"required"`
-		UserID uint   `json:"user_id" binding:"required"`
+		Name       string    `json:"name" binding:"required"`
+		Message    string    `json:"message" binding:"required"`
+		StartDate  time.Time `json:"start_date" binding:"required"`
+		EndDate    time.Time `json:"end_date" binding:"required"`
+		Status     string    `json:"status" binding:"required"`
+		UserID     uint      `json:"user_id" binding:"required"`
 	}
 
 	if err := c.ShouldBindJSON(&input); err != nil {
@@ -35,9 +39,12 @@ func CreateCampaign(c *gin.Context) {
 	}
 
 	campaign := models.Campaign{
-		Name:   input.Name,
-		Status: input.Status,
-		UserID: input.UserID,
+		Campaign_Name: input.Name,
+		Message_Body:  input.Message,
+		Start_Date:    input.StartDate,
+		End_Date:      input.EndDate,
+		Status:        input.Status,
+		UserID:        input.UserID,
 	}
 
 	db := utils.GetDB()
@@ -52,8 +59,11 @@ func CreateCampaign(c *gin.Context) {
 // UpdateCampaign updates an existing campaign
 func UpdateCampaign(c *gin.Context) {
 	var input struct {
-		Name   string `json:"name"`
-		Status string `json:"status"`
+		Name       string    `json:"name"`
+		Message    string    `json:"message"`
+		StartDate  time.Time `json:"start_date"`
+		EndDate    time.Time `json:"end_date"`
+		Status     string    `json:"status"`
 	}
 
 	campaignID := c.Param("id")
@@ -72,7 +82,16 @@ func UpdateCampaign(c *gin.Context) {
 
 	// Update fields if provided
 	if input.Name != "" {
-		campaign.Name = input.Name
+		campaign.Campaign_Name = input.Name
+	}
+	if input.Message != "" {
+		campaign.Message_Body = input.Message
+	}
+	if !input.StartDate.IsZero() {
+		campaign.Start_Date = input.StartDate
+	}
+	if !input.EndDate.IsZero() {
+		campaign.End_Date = input.EndDate
 	}
 	if input.Status != "" {
 		campaign.Status = input.Status

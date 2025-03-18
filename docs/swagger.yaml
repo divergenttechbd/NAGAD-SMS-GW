@@ -24,36 +24,288 @@ definitions:
     - username
     type: object
   models.Campaign:
-    description: A marketing or messaging campaign associated with users
+    description: Represents an SMS campaign associated with a user
     properties:
+      campaign_name:
+        description: Campaign_Name is the name of the campaign
+        type: string
+      campaign_recipients:
+        description: CampaignRecipients represents the recipients associated with
+          this campaign
+        items:
+          $ref: '#/definitions/models.CampaignRecipient'
+        type: array
+      campaign_workflow_processings:
+        description: CampaignWorkflowProcessings represents the workflows associated
+          with this campaign
+        items:
+          $ref: '#/definitions/models.CampaignWorkflowProcessing'
+        type: array
+      created_at:
+        type: string
+      deleted_at:
+        type: string
+      end_date:
+        description: End_Date is the end date of the campaign
+        type: string
       id:
-        type: integer
-      name:
-        description: Name is the name of the campaign
+        type: string
+      message_body:
+        description: Message_Body is the body of the SMS message for the campaign
+        type: string
+      start_date:
+        description: Start_Date is the start date of the campaign
         type: string
       status:
-        description: Status represents the campaign status
+        description: Status indicates the status of the campaign (e.g., Active, Inactive)
+        type: string
+      updated_at:
         type: string
       user_id:
-        description: UserID is the ID of the user associated with the campaign
+        description: UserID is the ID of the user who created the campaign
         type: integer
+    type: object
+  models.CampaignRecipient:
+    description: Represents a recipient of a campaign and their delivery status
+    properties:
+      campaign:
+        allOf:
+        - $ref: '#/definitions/models.Campaign'
+        description: Campaign represents the campaign associated with this recipient
+      campaign_id:
+        description: CampaignID is the ID of the campaign (foreign key)
+        type: integer
+      created_at:
+        type: string
+      deleted_at:
+        type: string
+      id:
+        type: string
+      recipient:
+        description: RecipientID is the ID of the recipient (foreign key)
+        type: integer
+      status:
+        description: Status indicates the delivery status of the campaign to the recipient
+        type: string
+      updated_at:
+        type: string
+    type: object
+  models.CampaignWorkflow:
+    description: Represents a workflow for a campaign
+    properties:
+      campaign_workflow_processings:
+        description: CampaignWorkflowProcessings represents the campaigns associated
+          with this workflow
+        items:
+          $ref: '#/definitions/models.CampaignWorkflowProcessing'
+        type: array
+      campaign_workflow_users:
+        description: CampaignWorkflowUsers represents the users associated with this
+          workflow
+        items:
+          $ref: '#/definitions/models.CampaignWorkflowUser'
+        type: array
+      created_at:
+        type: string
+      deleted_at:
+        type: string
+      id:
+        type: string
+      name:
+        description: Name is the name of the workflow
+        type: string
+      updated_at:
+        type: string
+    type: object
+  models.CampaignWorkflowProcessing:
+    description: Represents the association between a campaign and a workflow
+    properties:
+      campaign:
+        allOf:
+        - $ref: '#/definitions/models.Campaign'
+        description: Campaign represents the campaign associated with this workflow
+      campaign_id:
+        description: CampaignID is the ID of the campaign (foreign key)
+        type: integer
+      campaign_workflow:
+        allOf:
+        - $ref: '#/definitions/models.CampaignWorkflow'
+        description: CampaignWorkflow represents the workflow associated with this
+          campaign
+      created_at:
+        type: string
+      deleted_at:
+        type: string
+      id:
+        type: string
+      updated_at:
+        type: string
+      workflow_id:
+        description: WorkflowID is the ID of the workflow (foreign key)
+        type: integer
+    type: object
+  models.CampaignWorkflowUser:
+    description: Represents a user associated with a workflow and their status
+    properties:
+      campaign_workflow:
+        allOf:
+        - $ref: '#/definitions/models.CampaignWorkflow'
+        description: CampaignWorkflow represents the workflow associated with this
+          user
+      created_at:
+        type: string
+      deleted_at:
+        type: string
+      id:
+        type: string
+      status:
+        description: Status indicates whether the user is active or inactive in the
+          workflow
+        type: string
+      updated_at:
+        type: string
+      user:
+        allOf:
+        - $ref: '#/definitions/models.User'
+        description: User represents the user associated with this workflow
+      user_id:
+        description: UserID is the ID of the user (foreign key)
+        type: integer
+      workflow_id:
+        description: WorkflowID is the ID of the workflow (foreign key)
+        type: integer
+    type: object
+  models.DND:
+    description: Represents a phone number that should not receive promotional SMS
+    properties:
+      created_at:
+        type: string
+      deleted_at:
+        type: string
+      id:
+        type: string
+      phone_number:
+        description: Phone_Number is the number that should not receive promotional
+          SMS
+        type: string
+      reason:
+        description: Reason provides the reason for adding the number to the DND list
+        type: string
+      status:
+        description: Status indicates whether the DND entry is active or inactive
+        type: string
+      updated_at:
+        type: string
+    type: object
+  models.MNO:
+    description: Represents the configuration for an MNO, including prefix, channels,
+      and TPS limits
+    properties:
+      channels:
+        description: Channels represents the delivery channels associated with the
+          MNO
+        items:
+          $ref: '#/definitions/models.MnoChannels'
+        type: array
+      created_at:
+        type: string
+      deleted_at:
+        type: string
+      id:
+        type: string
+      mno_name:
+        description: MNO_Name is the name of the Mobile Network Operator (e.g., GP,
+          BL, RB)
+        type: string
+      prefix:
+        description: Prefix is the phone number prefix associated with the MNO (e.g.,
+          017, 019)
+        type: string
+      status:
+        description: Status indicates whether the MNO configuration is active or inactive
+        type: string
+      updated_at:
+        type: string
+    type: object
+  models.MnoChannels:
+    description: Represents a delivery channel (e.g., HTTP, SMPP) for an MNO
+    properties:
+      channel_id:
+        description: ChannelID is the unique identifier for the channel
+        type: integer
+      channel_type:
+        description: ChannelType is the type of the channel (HTTP or SMPP)
+        type: string
+      created_at:
+        type: string
+      deleted_at:
+        type: string
+      id:
+        type: string
+      mno_id:
+        description: MNOID is the ID of the MNO associated with this channel
+        type: integer
+      priority:
+        description: Priority is the priority for the SMS type
+        type: integer
+      status:
+        description: Status indicates whether the channel is active or inactive
+        type: string
+      tps:
+        description: TPS is the transactions per second limit for the channel
+        type: integer
+      updated_at:
+        type: string
+    type: object
+  models.MsgPriority:
+    description: Represents the priority levels for SMS types (e.g., OTP, Transaction,
+      Promotional)
+    properties:
+      created_at:
+        type: string
+      deleted_at:
+        type: string
+      description:
+        description: Description provides additional details about the priority level
+        type: string
+      id:
+        type: string
+      message_type:
+        description: Message_Type is the type of SMS (e.g., OTP, Transaction, Promotional)
+        type: string
+      priority_level:
+        description: Priority_Level is the priority level for the SMS type (0 = Highest,
+          3 = Lowest)
+        type: integer
+      updated_at:
+        type: string
     type: object
   models.Permission:
     description: A permission assigned to roles
     properties:
+      created_at:
+        type: string
+      deleted_at:
+        type: string
       id:
-        type: integer
+        type: string
       name:
         description: |-
           Name is the unique name of the permission
           @Property name string true "Permission Name" example("view_users")
         type: string
+      updated_at:
+        type: string
     type: object
   models.Role:
     description: Role assigned to users with permissions
     properties:
+      created_at:
+        type: string
+      deleted_at:
+        type: string
       id:
-        type: integer
+        type: string
       name:
         description: |-
           Name is the unique name of the role
@@ -66,6 +318,8 @@ definitions:
         items:
           $ref: '#/definitions/models.Permission'
         type: array
+      updated_at:
+        type: string
     type: object
   models.User:
     description: Represents a user in the system with roles and campaigns
@@ -75,18 +329,30 @@ definitions:
         items:
           $ref: '#/definitions/models.Campaign'
         type: array
+      created_at:
+        type: string
+      deleted_at:
+        type: string
       email:
         description: Email is the user's email address
         type: string
       id:
-        type: integer
+        type: string
       roles:
         description: Roles represents the roles assigned to the user
         items:
           $ref: '#/definitions/models.Role'
         type: array
+      updated_at:
+        type: string
       username:
         description: Username is a unique identifier for the user
+        type: string
+    type: object
+  utils.SuccessResponse:
+    properties:
+      data: {}
+      message:
         type: string
     type: object
 info:
@@ -171,6 +437,1163 @@ paths:
       summary: Register a new user
       tags:
       - auth
+  /campaign-recipient:
+    post:
+      consumes:
+      - application/json
+      description: Create a new campaign recipient with campaign ID, recipient ID,
+        and status
+      parameters:
+      - description: Campaign recipient details
+        in: body
+        name: input
+        required: true
+        schema:
+          additionalProperties: true
+          type: object
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/models.CampaignRecipient'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Create a new campaign recipient
+      tags:
+      - Campaign Recipients
+  /campaign-recipient/{id}:
+    delete:
+      consumes:
+      - application/json
+      description: Delete a campaign recipient by ID
+      parameters:
+      - description: Campaign Recipient ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Delete an existing campaign recipient
+      tags:
+      - Campaign Recipients
+    put:
+      consumes:
+      - application/json
+      description: 'Update a campaign recipient by ID with optional fields: campaign
+        ID, recipient ID, and status'
+      parameters:
+      - description: Campaign Recipient ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Campaign recipient details
+        in: body
+        name: input
+        required: true
+        schema:
+          additionalProperties: true
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.CampaignRecipient'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Update an existing campaign recipient
+      tags:
+      - Campaign Recipients
+  /campaign-recipients:
+    get:
+      consumes:
+      - application/json
+      description: Get all campaign recipients
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/models.CampaignRecipient'
+            type: array
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Get all campaign recipients
+      tags:
+      - Campaign Recipients
+  /campaign-recipients/{id}:
+    get:
+      consumes:
+      - application/json
+      description: Get details of a campaign recipient by ID
+      parameters:
+      - description: Campaign Recipient ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.CampaignRecipient'
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Get campaign recipient details
+      tags:
+      - Campaign Recipients
+  /campaign-workflow:
+    post:
+      consumes:
+      - application/json
+      description: Create a new campaign workflow with name
+      parameters:
+      - description: Campaign workflow details
+        in: body
+        name: input
+        required: true
+        schema:
+          additionalProperties: true
+          type: object
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/models.CampaignWorkflow'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Create a new campaign workflow
+      tags:
+      - Campaign Workflows
+  /campaign-workflow-processing:
+    post:
+      consumes:
+      - application/json
+      description: Create a new processing association between a campaign and a workflow
+      parameters:
+      - description: Campaign workflow processing details
+        in: body
+        name: input
+        required: true
+        schema:
+          additionalProperties: true
+          type: object
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/models.CampaignWorkflowProcessing'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Create a new processing association between a campaign and a workflow
+      tags:
+      - Campaign Workflow Processings
+  /campaign-workflow-processing/{id}:
+    delete:
+      consumes:
+      - application/json
+      description: Delete a processing association between a campaign and a workflow
+        by ID
+      parameters:
+      - description: Campaign Workflow Processing ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Delete an existing processing association between a campaign and a
+        workflow
+      tags:
+      - Campaign Workflow Processings
+    put:
+      consumes:
+      - application/json
+      description: Update a processing association between a campaign and a workflow
+        by ID
+      parameters:
+      - description: Campaign Workflow Processing ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Campaign workflow processing details
+        in: body
+        name: input
+        required: true
+        schema:
+          additionalProperties: true
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.CampaignWorkflowProcessing'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Update an existing processing association between a campaign and a
+        workflow
+      tags:
+      - Campaign Workflow Processings
+  /campaign-workflow-processings/{id}:
+    get:
+      consumes:
+      - application/json
+      description: Get details of a processing association between a campaign and
+        a workflow by ID
+      parameters:
+      - description: Campaign Workflow Processing ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.CampaignWorkflowProcessing'
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Get campaign workflow processing details
+      tags:
+      - Campaign Workflow Processings
+  /campaign-workflow-user:
+    post:
+      consumes:
+      - application/json
+      description: Create a new user associated with a campaign workflow
+      parameters:
+      - description: Campaign workflow user details
+        in: body
+        name: input
+        required: true
+        schema:
+          additionalProperties: true
+          type: object
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/models.CampaignWorkflowUser'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Create a new user associated with a campaign workflow
+      tags:
+      - Campaign Workflow Users
+  /campaign-workflow-user/{id}:
+    delete:
+      consumes:
+      - application/json
+      description: Delete a user associated with a campaign workflow by ID
+      parameters:
+      - description: Campaign Workflow User ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Delete an existing user associated with a campaign workflow
+      tags:
+      - Campaign Workflow Users
+    put:
+      consumes:
+      - application/json
+      description: Update a user associated with a campaign workflow by ID
+      parameters:
+      - description: Campaign Workflow User ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Campaign workflow user details
+        in: body
+        name: input
+        required: true
+        schema:
+          additionalProperties: true
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.CampaignWorkflowUser'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Update an existing user associated with a campaign workflow
+      tags:
+      - Campaign Workflow Users
+  /campaign-workflow-users/{id}:
+    get:
+      consumes:
+      - application/json
+      description: Get details of a user associated with a campaign workflow by ID
+      parameters:
+      - description: Campaign Workflow User ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.CampaignWorkflowUser'
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Get campaign workflow user details
+      tags:
+      - Campaign Workflow Users
+  /campaign-workflow/{id}:
+    delete:
+      consumes:
+      - application/json
+      description: Delete a campaign workflow by ID
+      parameters:
+      - description: Campaign Workflow ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Delete an existing campaign workflow
+      tags:
+      - Campaign Workflows
+    put:
+      consumes:
+      - application/json
+      description: 'Update a campaign workflow by ID with optional fields: name'
+      parameters:
+      - description: Campaign Workflow ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Campaign workflow details
+        in: body
+        name: input
+        required: true
+        schema:
+          additionalProperties: true
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.CampaignWorkflow'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Update an existing campaign workflow
+      tags:
+      - Campaign Workflows
+  /campaign-workflows:
+    get:
+      consumes:
+      - application/json
+      description: Get all campaign workflows
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/models.CampaignWorkflow'
+            type: array
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Get all campaign workflows
+      tags:
+      - Campaign Workflows
+  /campaign-workflows/{id}:
+    get:
+      consumes:
+      - application/json
+      description: Get details of a campaign workflow by ID
+      parameters:
+      - description: Campaign Workflow ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.CampaignWorkflow'
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Get campaign workflow details
+      tags:
+      - Campaign Workflows
+  /dnd:
+    post:
+      consumes:
+      - application/json
+      description: Create a new DND entry with phone number, reason, and status
+      parameters:
+      - description: DND details
+        in: body
+        name: input
+        required: true
+        schema:
+          additionalProperties: true
+          type: object
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/models.DND'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Create a new DND entry
+      tags:
+      - DND
+  /dnd/{id}:
+    delete:
+      consumes:
+      - application/json
+      description: Delete a DND entry by ID
+      parameters:
+      - description: DND ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Delete an existing DND entry
+      tags:
+      - DND
+    put:
+      consumes:
+      - application/json
+      description: 'Update a DND entry by ID with optional fields: phone number, reason,
+        and status'
+      parameters:
+      - description: DND ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: DND details
+        in: body
+        name: input
+        required: true
+        schema:
+          additionalProperties: true
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.DND'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Update an existing DND entry
+      tags:
+      - DND
+  /dnds:
+    get:
+      consumes:
+      - application/json
+      description: Get all DND entries
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/models.DND'
+            type: array
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Get all DND entries
+      tags:
+      - DND
+  /dnds/{id}:
+    get:
+      consumes:
+      - application/json
+      description: Get details of a DND entry by ID
+      parameters:
+      - description: DND ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.DND'
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Get DND details
+      tags:
+      - DND
+  /mno:
+    post:
+      consumes:
+      - application/json
+      description: Create a new MNO with name, prefix, and status
+      parameters:
+      - description: MNO details
+        in: body
+        name: input
+        required: true
+        schema:
+          additionalProperties: true
+          type: object
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/models.MNO'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Create a new Mobile Network Operator
+      tags:
+      - MNO
+  /mno-channels:
+    post:
+      consumes:
+      - application/json
+      description: Create a new channel for an MNO with the provided details
+      parameters:
+      - description: MNO channel details
+        in: body
+        name: input
+        required: true
+        schema:
+          additionalProperties: true
+          type: object
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/models.MnoChannels'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Create a new MNO channel
+      tags:
+      - MNO Channels
+  /mno-channels/{id}:
+    delete:
+      consumes:
+      - application/json
+      description: Delete an MNO channel by ID
+      parameters:
+      - description: MNO Channel ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Delete an MNO channel
+      tags:
+      - MNO Channels
+    put:
+      consumes:
+      - application/json
+      description: Update an existing MNO channel with the provided details
+      parameters:
+      - description: MNO Channel ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: MNO channel details
+        in: body
+        name: input
+        required: true
+        schema:
+          additionalProperties: true
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.MnoChannels'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Update an existing MNO channel
+      tags:
+      - MNO Channels
+  /mno/{id}:
+    delete:
+      consumes:
+      - application/json
+      description: Delete an MNO by ID
+      parameters:
+      - description: MNO ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/utils.SuccessResponse'
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Delete an existing Mobile Network Operator
+      tags:
+      - MNO
+    put:
+      consumes:
+      - application/json
+      description: 'Update an MNO by ID with optional fields: name, prefix, and status'
+      parameters:
+      - description: MNO ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: MNO details
+        in: body
+        name: input
+        required: true
+        schema:
+          additionalProperties: true
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.MNO'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Update an existing Mobile Network Operator
+      tags:
+      - MNO
+  /mnos:
+    get:
+      consumes:
+      - application/json
+      description: Get all MNOs with their channels
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/models.MNO'
+            type: array
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Get all MNOs
+      tags:
+      - MNOs
+  /mnos/{id}:
+    get:
+      consumes:
+      - application/json
+      description: Get details of an MNO by ID including its channels
+      parameters:
+      - description: MNO ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.MNO'
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Get MNO details
+      tags:
+      - MNOs
+  /msg-priorities:
+    get:
+      consumes:
+      - application/json
+      description: Get all SMS priority configurations
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/models.MsgPriority'
+            type: array
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Get all SMS priority configurations
+      tags:
+      - SMS Priority
+  /msg-priorities/{id}:
+    get:
+      consumes:
+      - application/json
+      description: Get details of an SMS priority configuration by ID
+      parameters:
+      - description: SMS Priority ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.MsgPriority'
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Get SMS priority details
+      tags:
+      - SMS Priority
+  /msg-priority:
+    post:
+      consumes:
+      - application/json
+      description: Create a new SMS priority configuration with message type, priority
+        level, and description
+      parameters:
+      - description: SMS priority details
+        in: body
+        name: input
+        required: true
+        schema:
+          additionalProperties: true
+          type: object
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/models.MsgPriority'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Create a new SMS priority configuration
+      tags:
+      - SMS Priority
+  /msg-priority/{id}:
+    delete:
+      consumes:
+      - application/json
+      description: Delete an SMS priority configuration by ID
+      parameters:
+      - description: SMS Priority ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Delete an existing SMS priority configuration
+      tags:
+      - SMS Priority
+    put:
+      consumes:
+      - application/json
+      description: 'Update an SMS priority configuration by ID with optional fields:
+        message type, priority level, and description'
+      parameters:
+      - description: SMS Priority ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: SMS priority details
+        in: body
+        name: input
+        required: true
+        schema:
+          additionalProperties: true
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.MsgPriority'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Update an existing SMS priority configuration
+      tags:
+      - SMS Priority
 securityDefinitions:
   BearerAuth:
     in: header
