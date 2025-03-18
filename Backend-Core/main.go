@@ -86,6 +86,7 @@ func main() {
 	{
 		routes.SetupUserRoutes(apiRoutes)
 		routes.SetupCampaignRoutes(apiRoutes)
+		routes.SetupMNORoutes(apiRoutes)
 	}
 
 	// Swagger route (only if ENABLE_SWAGGER is true)

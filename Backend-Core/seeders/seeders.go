@@ -49,6 +49,11 @@ func SeedData() {
 		{Name: "edit_user"},
 		{Name: "delete_user"},
 		{Name: "view_user"},
+		{Name: "create_mno"},
+		{Name: "edit_mno"},
+		{Name: "delete_mno"},
+		{Name: "view_mno"},
+		{Name: "get_mno_details"},
 	}
 
 	for _, permission := range permissions {
