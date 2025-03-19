@@ -1,18 +1,23 @@
 package routes
 
-// import (
-// 	"myproject/controllers"
-// 	"myproject/middleware"
+import (
+	"myproject/config"
+	"myproject/controllers"
+	"myproject/middleware"
 
-// 	"github.com/gin-gonic/gin"
-// )
+	"github.com/gin-gonic/gin"
+	influxdb2 "github.com/influxdata/influxdb-client-go/v2"
+)
 
-// // SetupSMSGatewayRoutes defines routes for SMS Gateway
-// func SetupSMSGatewayRoutes(r *gin.RouterGroup) {
-// 	smsRoutes := r.Group("/sms")
-// 	smsRoutes.Use(middleware.JWTAuth()) // Apply authentication middleware
-// 	{
-// 		// Apply RBAC middleware to secure SMS Gateway routes
-// 		smsRoutes.POST("/send", middleware.RBAC("send_sms"), controllers.ProcessSMS)
-// 	}
-// }
+// SetupSMSGatewayRoutes sets up the SMS Gateway routes
+func SetupSMSGatewayRoutes(r *gin.RouterGroup, influxClient influxdb2.Client, cfg *config.Config) {
+	// Initialize the SMS Gateway Controller
+	smsController := controllers.NewSMSGatewayController(influxClient, cfg)
+
+	smsRoutes := r.Group("/sms")
+	smsRoutes.Use(middleware.JWTAuth()) // Ensure authentication middleware is applied
+	{
+		// Apply RBAC middleware to each route with the required permission
+		smsRoutes.POST("/send", middleware.RBAC("send_sms"), smsController.ProcessSMS)
+	}
+}

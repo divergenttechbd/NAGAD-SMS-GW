@@ -19,6 +19,8 @@ import (
 	"myproject/models"
 	"myproject/routes"
 	"myproject/utils"
+
+	influxdb2 "github.com/influxdata/influxdb-client-go/v2"
 )
 
 // @title My Project API
@@ -74,25 +76,6 @@ func main() {
 	// Use the SetDBMiddleware to set the database connection in the context
 	router.Use(middleware.SetDBMiddleware(db))
 
-	// Routes
-	authRoutes := router.Group("/auth")
-	{
-		authRoutes.POST("/login", controllers.Login)
-		authRoutes.POST("/register", controllers.Register)
-	}
-
-	apiRoutes := router.Group("/api")
-	apiRoutes.Use(middleware.JWTAuth())
-	{
-		routes.SetupUserRoutes(apiRoutes)
-		routes.SetupCampaignRoutes(apiRoutes)
-		routes.SetupMNORoutes(apiRoutes)
-		routes.SetupDndRoutes(apiRoutes)
-		routes.SetupMsgPriorityRoutes(apiRoutes)
-		routes.SetupCampaignRecipientRoutes(apiRoutes)
-		routes.SetupCampaignWorkflowRoutes(apiRoutes)
-	}
-
 	// Swagger route (only if ENABLE_SWAGGER is true)
 	if os.Getenv("ENABLE_SWAGGER") == "true" {
 		log.Println("Swagger is enabled. Serving API documentation at /swagger/index.html")
@@ -131,6 +114,32 @@ func main() {
 		log.Printf("Failed to publish message: %v", err)
 	}
 	/*------------- RabbitMQ -------------*/
+
+	// Load Configuration
+	cfg := config.GetConfig()
+	// Initialize InfluxDB client
+	influxClient := influxdb2.NewClient(cfg.InfluxDBURL, cfg.InfluxDBToken)
+	defer influxClient.Close()
+
+	// Routes
+	authRoutes := router.Group("/auth")
+	{
+		authRoutes.POST("/login", controllers.Login)
+		authRoutes.POST("/register", controllers.Register)
+	}
+
+	apiRoutes := router.Group("/api")
+	apiRoutes.Use(middleware.JWTAuth())
+	{
+		routes.SetupUserRoutes(apiRoutes)
+		routes.SetupCampaignRoutes(apiRoutes)
+		routes.SetupMNORoutes(apiRoutes)
+		routes.SetupDndRoutes(apiRoutes)
+		routes.SetupMsgPriorityRoutes(apiRoutes)
+		routes.SetupCampaignRecipientRoutes(apiRoutes)
+		routes.SetupCampaignWorkflowRoutes(apiRoutes)
+		routes.SetupSMSGatewayRoutes(apiRoutes, influxClient, cfg)
+	}
 
 	// Start server
 	port := os.Getenv("PORT")
