@@ -117,12 +117,17 @@ func (r *RabbitMQ) DeclarePriorityQueue(queueName string) error {
 
 // PublishWithPriority publishes a message to a priority queue with the given priority.
 func (r *RabbitMQ) PublishWithPriority(queueName string, message []byte, priority uint8) error {
-	r.mu.Lock()
-	defer r.mu.Unlock()
+
+	if r == nil {
+		return fmt.Errorf("RabbitMQ instance is nil")
+	}
 
 	if r.channel == nil {
 		return errors.New("RabbitMQ channel is not open")
 	}
+
+	r.mu.Lock()
+	defer r.mu.Unlock()
 
 	// Publish the message with the specified priority
 	err := r.channel.Publish(

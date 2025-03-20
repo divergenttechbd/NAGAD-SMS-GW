@@ -18,6 +18,7 @@ func SetupSMSGatewayRoutes(r *gin.RouterGroup, influxClient influxdb2.Client, cf
 	smsRoutes.Use(middleware.JWTAuth()) // Ensure authentication middleware is applied
 	{
 		// Apply RBAC middleware to each route with the required permission
-		smsRoutes.POST("/send", middleware.RBAC("send_sms"), smsController.ProcessSMS)
+		// smsRoutes.POST("/send", middleware.RBAC("send_sms"), smsController.ProcessSMS)
+		smsRoutes.POST("/send", smsController.ProcessSMS)
 	}
 }

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math/rand"
 	"myproject/config"
+	"myproject/rabbitmq"
 	"net/http"
 	"time"
 
@@ -22,6 +23,7 @@ type SMSRequest struct {
 type SMSGatewayController struct {
 	InfluxClient influxdb2.Client
 	Config       *config.Config
+	RabbitMQ     *rabbitmq.RabbitMQ
 }
 
 // NewSMSGatewayController initializes an SMSGatewayController
@@ -63,16 +65,26 @@ func (s *SMSGatewayController) ProcessSMS(c *gin.Context) {
 	msgID := generateMsgID()
 
 	// Simulate queuing the message (Replace this with actual queue logic)
-	go func() {
-		time.Sleep(2 * time.Second) // Simulating processing delay
-	}()
+	// go func() {
+	// 	time.Sleep(2 * time.Second) // Simulating processing delay
+	// }()
+
+	// Publish to RabbitMQ
+	err := s.RabbitMQ.PublishWithPriority("general", []byte(`{"message": "This is a general message"}`), 1) // Adjust priority if needed
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to publish message"})
+		return
+	}
 
 	// Log the message in InfluxDB
 	writeAPI := s.InfluxClient.WriteAPIBlocking(s.Config.InfluxDBOrg, s.Config.InfluxDBBucket)
 	point := influxdb2.NewPoint("sms_delivery",
 		map[string]string{
 			"msg_id": msgID,
+			"type":   "general", // otp, transactional, promotional etc
 			"mno":    mno,
+			"msisdn": smsReq.MSISDN,
+			"text":   smsReq.SMSText,
 			"status": "pending",
 		},
 		map[string]interface{}{

@@ -95,6 +95,7 @@ func main() {
 	}
 	defer rmq.Close()
 
+	/* ------------- Declare Priority Queues ------------- *
 	// Declare priority queues
 	queues := []string{"general", "promotional", "transactional", "otp"}
 	for _, queue := range queues {
@@ -102,7 +103,9 @@ func main() {
 			log.Fatalf("Failed to declare queue %s: %v", queue, err)
 		}
 	}
+	/* ------------- Declare Priority Queues ------------- */
 
+	/*------------- Example Publish -------------*
 	// Example: Publish messages with different priorities
 	err = rmq.PublishWithPriority("general", []byte(`{"message": "This is a general message"}`), 1)
 	if err != nil {
@@ -113,6 +116,8 @@ func main() {
 	if err != nil {
 		log.Printf("Failed to publish message: %v", err)
 	}
+	/*------------- Example Publish -------------*/
+
 	/*------------- RabbitMQ -------------*/
 
 	// Load Configuration
@@ -144,7 +149,7 @@ func main() {
 	// Start server
 	port := os.Getenv("PORT")
 	if port == "" {
-		port = "8080"
+		port = "8090"
 	}
 	log.Printf("Server starting on port %s", port)
 	log.Fatal(router.Run(fmt.Sprintf(":%s", port)))

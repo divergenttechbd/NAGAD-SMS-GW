@@ -5,3 +5,8 @@
 - RAM: 10–20 GB for indexes, rest for caching.
 - Disk: 260 GB/year, no issue.
 - No scaling needed for 13B/year.
+
+
+
+# Clean Cache
+go clean -cache 
