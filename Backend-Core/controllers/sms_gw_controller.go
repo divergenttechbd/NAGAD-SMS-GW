@@ -27,8 +27,8 @@ type SMSGatewayController struct {
 }
 
 // NewSMSGatewayController initializes an SMSGatewayController
-func NewSMSGatewayController(client influxdb2.Client, cfg *config.Config) *SMSGatewayController {
-	return &SMSGatewayController{InfluxClient: client, Config: cfg}
+func NewSMSGatewayController(client influxdb2.Client, cfg *config.Config, rmq *rabbitmq.RabbitMQ) *SMSGatewayController {
+	return &SMSGatewayController{InfluxClient: client, Config: cfg, RabbitMQ: rmq}
 }
 
 // ProcessSMS receives an SMS request and processes it

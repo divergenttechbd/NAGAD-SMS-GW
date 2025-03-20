@@ -143,7 +143,7 @@ func main() {
 		routes.SetupMsgPriorityRoutes(apiRoutes)
 		routes.SetupCampaignRecipientRoutes(apiRoutes)
 		routes.SetupCampaignWorkflowRoutes(apiRoutes)
-		routes.SetupSMSGatewayRoutes(apiRoutes, influxClient, cfg)
+		routes.SetupSMSGatewayRoutes(apiRoutes, influxClient, cfg, rmq)
 	}
 
 	// Start server
