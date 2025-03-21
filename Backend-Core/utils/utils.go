@@ -2,6 +2,7 @@ package utils
 
 import (
 	"myproject/config"
+
 	"gorm.io/gorm"
 )
 
@@ -24,3 +25,4 @@ func GetConfig() *config.Config {
 func GetDB() *gorm.DB {
 	return db
 }
+

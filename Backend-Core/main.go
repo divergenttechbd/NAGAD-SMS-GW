@@ -63,7 +63,7 @@ func main() {
 	}
 
 	// Initialize Redis
-	// redisClient := utils.InitRedis()
+	redisClient := utils.InitRedis()
 
 	// Initialize Gin router
 	router := gin.Default()
@@ -71,7 +71,7 @@ func main() {
 	// Middleware
 	router.Use(middleware.Logger())
 	router.Use(middleware.CORS())
-	// router.Use(middleware.RateLimiter(redisClient))
+	router.Use(middleware.RateLimiter(redisClient))
 
 	// Use the SetDBMiddleware to set the database connection in the context
 	router.Use(middleware.SetDBMiddleware(db))

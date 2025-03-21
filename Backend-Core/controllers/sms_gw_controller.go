@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"math/rand"
 	"myproject/config"
@@ -64,15 +65,26 @@ func (s *SMSGatewayController) ProcessSMS(c *gin.Context) {
 	// Generate unique message ID
 	msgID := generateMsgID()
 
-	// Simulate queuing the message (Replace this with actual queue logic)
-	// go func() {
-	// 	time.Sleep(2 * time.Second) // Simulating processing delay
-	// }()
+	// Prepare message payload for RabbitMQ
+	messageData := map[string]string{
+		"msg_id": msgID,
+		"msisdn": smsReq.MSISDN,
+		"text":   smsReq.SMSText,
+		"mno":    mno,
+		"type":   "general", // Can be OTP, transactional, promotional, etc.
+		"status": "queued",
+	}
 
-	// Publish to RabbitMQ
-	err := s.RabbitMQ.PublishWithPriority("general", []byte(`{"message": "This is a general message"}`), 1) // Adjust priority if needed
+	messageJSON, err := json.Marshal(messageData)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to publish message"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to serialize message data"})
+		return
+	}
+
+	// Publish to RabbitMQ queue
+	err = s.RabbitMQ.PublishWithPriority("general", messageJSON, 1) // Adjust priority if needed
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to publish message to RabbitMQ"})
 		return
 	}
 
@@ -81,11 +93,11 @@ func (s *SMSGatewayController) ProcessSMS(c *gin.Context) {
 	point := influxdb2.NewPoint("sms_delivery",
 		map[string]string{
 			"msg_id": msgID,
-			"type":   "general", // otp, transactional, promotional etc
+			"type":   "general",
 			"mno":    mno,
 			"msisdn": smsReq.MSISDN,
 			"text":   smsReq.SMSText,
-			"status": "pending",
+			"status": "queued",
 		},
 		map[string]interface{}{
 			"retry_count":           0,

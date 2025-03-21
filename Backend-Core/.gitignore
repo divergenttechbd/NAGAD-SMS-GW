@@ -13,3 +13,5 @@ vendor/
 # IDE files
 .vscode/
 .idea/
+
+/Backend-Core/tmp

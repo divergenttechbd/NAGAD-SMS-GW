@@ -33,3 +33,7 @@ func InitRedis() *redis.Client {
 	RedisClient = client
 	return client
 }
+
+func GetRedis() *redis.Client {
+	return RedisClient
+}
