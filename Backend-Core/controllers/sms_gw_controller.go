@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"math/rand"
 	"myproject/config"
 	"myproject/rabbitmq"
@@ -18,6 +19,16 @@ import (
 type SMSRequest struct {
 	SMSText string `json:"sms_text" example:"Hello, this is a test message"`
 	MSISDN  string `json:"msisdn" example:"01712345678"`
+}
+
+// MessagePayload defines the structure of the message to be sent
+type MessagePayload struct {
+	MNO    string `json:"mno"`
+	MsgID  string `json:"msg_id"`
+	MSISDN string `json:"msisdn"`
+	Status string `json:"status"`
+	Text   string `json:"text"`
+	Type   string `json:"type"`
 }
 
 // SMSGatewayController handles SMS processing
@@ -112,6 +123,115 @@ func (s *SMSGatewayController) ProcessSMS(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "SMS received and queued", "msg_id": msgID})
+}
+
+// PublishMillionMessages publishes 1 million messages to the specified queue and logs them in InfluxDB
+// @Summary Publish 1 million test SMS messages
+// @Description Publishes 1 million messages to a specified RabbitMQ queue with priority and logs them in InfluxDB
+// @Tags SMS Gateway
+// @Produce json
+// @Param queueName query string true "Queue name (e.g., general, otp)" default(general)
+// @Param priority query uint8 true "Priority level (0-4)" default(1)
+// @Success 200 {object} map[string]interface{} "Messages published successfully"
+// @Failure 500 {object} map[string]string "Failed to publish messages"
+// @Router /sms/publish-million [post]
+func (s *SMSGatewayController) PublishMillionMessages(c *gin.Context) {
+	const totalMessages = 1_000_000
+	const batchSize = 10_000 // Batch size for progress logging
+
+	// Get query parameters
+	queueName := c.DefaultQuery("queueName", "general")
+	priorityStr := c.DefaultQuery("priority", "1")
+	var priority uint8
+	fmt.Sscanf(priorityStr, "%d", &priority)
+	if priority > 4 {
+		priority = 4 // Cap at max priority
+	}
+
+	// Base message payload
+	baseMsg := MessagePayload{
+		MNO:    "Robi",
+		MsgID:  "2025032102343877835", // Will be overridden for uniqueness
+		MSISDN: "01814266295",
+		Status: "queued",
+		Text:   "",
+		Type:   "general",
+	}
+
+	startTime := time.Now()
+	log.Printf("Starting to publish %d messages to queue %s with priority %d", totalMessages, queueName, priority)
+
+	for i := 0; i < totalMessages; i++ {
+		// Create a unique MsgID for each message
+		msg := baseMsg
+		msg.MsgID = fmt.Sprintf("20250321%010d", i) // Unique ID: 202503210000000001 to 20250321000999999
+
+		// Marshal to JSON for RabbitMQ
+		msgBytes, err := json.Marshal(msg)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Failed to marshal message %d: %v", i, err)})
+			return
+		}
+
+		// Publish to RabbitMQ
+		err = s.RabbitMQ.PublishWithPriority(queueName, msgBytes, priority)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Failed to publish message %d: %v", i, err)})
+			return
+		}
+
+		// Log to InfluxDB
+		writeAPI := s.InfluxClient.WriteAPIBlocking(s.Config.InfluxDBOrg, s.Config.InfluxDBBucket)
+		point := influxdb2.NewPoint("sms_delivery",
+			map[string]string{
+				"msg_id": msg.MsgID,
+				"type":   msg.Type,
+				"mno":    msg.MNO,
+				"msisdn": msg.MSISDN,
+				"text":   msg.Text,
+				"status": msg.Status,
+			},
+			map[string]interface{}{
+				"retry_count":           0,
+				"queue_time":            time.Now().UnixMilli(),
+				"carrier_response_time": 0,
+			},
+			time.Now())
+
+		if err := writeAPI.WritePoint(context.Background(), point); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Failed to write message %d to InfluxDB: %v", i, err)})
+			return
+		}
+
+		// Log progress every batchSize messages
+		if (i+1)%batchSize == 0 {
+			elapsed := time.Since(startTime)
+			log.Printf("Published %d of %d messages (%.2f%%) to queue and InfluxDB in %v", i+1, totalMessages, float64(i+1)/float64(totalMessages)*100, elapsed)
+		}
+	}
+
+	// Calculate and log total time taken
+	totalDuration := time.Since(startTime)
+	throughput := float64(totalMessages) / totalDuration.Seconds()
+	log.Printf("Completed: Published %d messages to queue %s and InfluxDB in %v (throughput: %.2f messages/second)", totalMessages, queueName, totalDuration, throughput)
+
+	c.JSON(http.StatusOK, gin.H{
+		"message":    "Successfully published 1 million messages",
+		"queue":      queueName,
+		"priority":   priority,
+		"duration":   totalDuration.String(),
+		"throughput": fmt.Sprintf("%.2f msg/s", throughput),
+	})
+}
+
+func (s *SMSGatewayController) GetRabbitMQStatistics(c *gin.Context) {
+	stats, err := s.RabbitMQ.GetStatistics()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Failed to retrieve RabbitMQ statistics: %v", err)})
+		return
+	}
+
+	c.JSON(http.StatusOK, stats)
 }
 
 // getMNO determines the carrier based on MSISDN prefix

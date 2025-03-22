@@ -87,9 +87,12 @@ func main() {
 	/*---------- RabbitMQ ---------*/
 	// Load RabbitMQ URLs from environment
 	rabbitMQURLs := strings.Split(os.Getenv("RABBITMQ_URLS"), ",")
+	rabbitMQmanagementURL := os.Getenv("RABBITMQ_MANAGEMENT_URL") // Adjust if different
+	rabbitMQusername := os.Getenv("RABBITMQ_USER")
+	rabbitMQpassword := os.Getenv("RABBITMQ_PASSWORD")
 
 	// Initialize RabbitMQ
-	rmq, err := rabbitmq.NewRabbitMQ(rabbitMQURLs)
+	rmq, err := rabbitmq.NewRabbitMQ(rabbitMQURLs, rabbitMQmanagementURL, rabbitMQusername, rabbitMQpassword)
 	if err != nil {
 		log.Fatalf("Failed to connect to RabbitMQ: %v", err)
 	}

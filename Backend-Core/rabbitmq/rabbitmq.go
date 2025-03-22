@@ -1,9 +1,11 @@
 package rabbitmq
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
+	"net/http"
 	"sync"
 	"time"
 
@@ -19,17 +21,52 @@ type RabbitMQ struct {
 	mu            sync.Mutex
 	reconnectChan chan bool
 	closed        bool
+	managementURL string // URL for RabbitMQ Management API (e.g., http://localhost:15672)
+	username      string // Management API username
+	password      string // Management API password
 }
 
-// NewRabbitMQ creates a new RabbitMQ connection.
-func NewRabbitMQ(urls []string) (*RabbitMQ, error) {
+// QueueStats represents key statistics for a RabbitMQ queue
+type QueueStats struct {
+	Messages        int64   `json:"messages"`
+	MessagesReady   int64   `json:"messages_ready"`
+	MessagesUnacked int64   `json:"messages_unacknowledged"`
+	PublishRate     float64 `json:"publish_rate,omitempty"`
+	DeliverRate     float64 `json:"deliver_rate,omitempty"`
+	AcknowledgeRate float64 `json:"acknowledge_rate,omitempty"`
+	ConsumerCount   int     `json:"consumers"`
+}
+
+// NodeStats represents key statistics for a RabbitMQ node
+type NodeStats struct {
+	MemoryUsed    int64 `json:"mem_used"`
+	FileDescUsed  int   `json:"fd_used"`
+	FileDescTotal int   `json:"fd_total"`
+	DiskFree      int64 `json:"disk_free"`
+	Connections   int   `json:"connections"`
+}
+
+// Statistics aggregates queue and node statistics
+type Statistics struct {
+	Queues map[string]QueueStats `json:"queues"`
+	Node   NodeStats             `json:"node"`
+}
+
+// NewRabbitMQ creates a new RabbitMQ connection with Management API access.
+func NewRabbitMQ(urls []string, managementURL, username, password string) (*RabbitMQ, error) {
 	if len(urls) == 0 {
 		return nil, errors.New("at least one RabbitMQ URL is required")
+	}
+	if managementURL == "" {
+		return nil, errors.New("management URL is required for statistics")
 	}
 
 	rmq := &RabbitMQ{
 		urls:          urls,
 		reconnectChan: make(chan bool),
+		managementURL: managementURL,
+		username:      username,
+		password:      password,
 	}
 
 	if err := rmq.connect(); err != nil {
@@ -96,15 +133,14 @@ func (r *RabbitMQ) DeclarePriorityQueue(queueName string) error {
 		return errors.New("RabbitMQ channel is not open")
 	}
 
-	// Declare a priority queue with x-max-priority set to 4
 	_, err := r.channel.QueueDeclare(
-		queueName, // queue name
-		true,      // durable
-		false,     // auto-delete
-		false,     // exclusive
-		false,     // no-wait
+		queueName,
+		true,
+		false,
+		false,
+		false,
 		amqp.Table{
-			"x-max-priority": 4, // Set maximum priority to 4
+			"x-max-priority": 4,
 		},
 	)
 	if err != nil {
@@ -117,7 +153,6 @@ func (r *RabbitMQ) DeclarePriorityQueue(queueName string) error {
 
 // PublishWithPriority publishes a message to a priority queue with the given priority.
 func (r *RabbitMQ) PublishWithPriority(queueName string, message []byte, priority uint8) error {
-
 	if r == nil {
 		return fmt.Errorf("RabbitMQ instance is nil")
 	}
@@ -129,17 +164,16 @@ func (r *RabbitMQ) PublishWithPriority(queueName string, message []byte, priorit
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	// Publish the message with the specified priority
 	err := r.channel.Publish(
-		"",        // exchange
-		queueName, // routing key
-		false,     // mandatory
-		false,     // immediate
+		"",
+		queueName,
+		false,
+		false,
 		amqp.Publishing{
 			ContentType:  "application/json",
 			Body:         message,
-			DeliveryMode: amqp.Persistent, // Ensure message durability
-			Priority:     priority,        // Set message priority
+			DeliveryMode: amqp.Persistent,
+			Priority:     priority,
 		},
 	)
 
@@ -151,6 +185,92 @@ func (r *RabbitMQ) PublishWithPriority(queueName string, message []byte, priorit
 
 	log.Printf("Published message to queue %s with priority %d", queueName, priority)
 	return nil
+}
+
+// GetStatistics retrieves key RabbitMQ statistics from the Management API.
+func (r *RabbitMQ) GetStatistics() (Statistics, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	var stats Statistics
+	stats.Queues = make(map[string]QueueStats)
+
+	client := &http.Client{Timeout: 10 * time.Second}
+	req, err := http.NewRequest("GET", fmt.Sprintf("%s/api/queues", r.managementURL), nil)
+	if err != nil {
+		return stats, fmt.Errorf("failed to create request: %v", err)
+	}
+	req.SetBasicAuth(r.username, r.password)
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return stats, fmt.Errorf("failed to fetch queue stats: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return stats, fmt.Errorf("unexpected status code: %d", resp.StatusCode)
+	}
+
+	var queues []struct {
+		Name            string `json:"name"`
+		Messages        int64  `json:"messages"`
+		MessagesReady   int64  `json:"messages_ready"`
+		MessagesUnacked int64  `json:"messages_unacknowledged"`
+		Consumers       int    `json:"consumers"`
+		MessageStats    struct {
+			PublishDetails struct {
+				Rate float64 `json:"rate"`
+			} `json:"publish_details"`
+			DeliverDetails struct {
+				Rate float64 `json:"rate"`
+			} `json:"deliver_details"`
+			AckDetails struct {
+				Rate float64 `json:"rate"`
+			} `json:"ack_details"`
+		} `json:"message_stats"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&queues); err != nil {
+		return stats, fmt.Errorf("failed to decode queue stats: %v", err)
+	}
+
+	for _, q := range queues {
+		stats.Queues[q.Name] = QueueStats{
+			Messages:        q.Messages,
+			MessagesReady:   q.MessagesReady,
+			MessagesUnacked: q.MessagesUnacked,
+			PublishRate:     q.MessageStats.PublishDetails.Rate,     // Fixed typo here
+			DeliverRate:     q.MessageStats.DeliverDetails.Rate,     // Fixed typo here
+			AcknowledgeRate: q.MessageStats.AckDetails.Rate,         // Fixed typo here
+			ConsumerCount:   q.Consumers,
+		}
+	}
+
+	req, err = http.NewRequest("GET", fmt.Sprintf("%s/api/nodes", r.managementURL), nil)
+	if err != nil {
+		return stats, fmt.Errorf("failed to create node request: %v", err)
+	}
+	req.SetBasicAuth(r.username, r.password)
+
+	resp, err = client.Do(req)
+	if err != nil {
+		return stats, fmt.Errorf("failed to fetch node stats: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return stats, fmt.Errorf("unexpected node status code: %d", resp.StatusCode)
+	}
+
+	var nodes []NodeStats
+	if err := json.NewDecoder(resp.Body).Decode(&nodes); err != nil {
+		return stats, fmt.Errorf("failed to decode node stats: %v", err)
+	}
+	if len(nodes) > 0 {
+		stats.Node = nodes[0] // Single node assumption
+	}
+
+	return stats, nil
 }
 
 // Close closes the RabbitMQ connection.

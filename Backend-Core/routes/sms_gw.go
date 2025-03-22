@@ -22,5 +22,7 @@ func SetupSMSGatewayRoutes(r *gin.RouterGroup, influxClient influxdb2.Client, cf
 		// Apply RBAC middleware to each route with the required permission
 		// smsRoutes.POST("/send", middleware.RBAC("send_sms"), smsController.ProcessSMS)
 		smsRoutes.POST("/send", smsController.ProcessSMS)
+		smsRoutes.GET("/test-million-msg", smsController.PublishMillionMessages)
+		smsRoutes.GET("/rabbitmq-stats", smsController.GetRabbitMQStatistics)
 	}
 }
