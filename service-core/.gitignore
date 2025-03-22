@@ -1,0 +1,17 @@
+# Binaries
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Environment files
+.env
+
+# Dependency directories
+vendor/
+
+# IDE files
+.vscode/
+.idea/
+
+/Backend-Core/tmp

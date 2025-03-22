@@ -1,0 +1,4 @@
+# api-gateway/routes
+routes\gateway.go:25:21: not enough arguments in call to os.Getenv
+	have ()
+	want (string)
