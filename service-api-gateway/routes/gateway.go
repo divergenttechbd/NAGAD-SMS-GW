@@ -30,9 +30,6 @@ func SetupGatewayRoutes(router *gin.Engine) {
 func forwardRequest(c *gin.Context, backendURL string) {
 	path := c.Param("path")
 
-	// log.Printf("Forwarding request to %s", backendURL+path)
-	// log.Printf("Forwarding request to %s", c.Request.Method)
-
 	// Create a new HTTP client
 	client := &http.Client{}
 
