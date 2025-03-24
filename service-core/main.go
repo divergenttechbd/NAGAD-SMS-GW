@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"log"
+	"net/http"
 	"os"
 	"strings"
 
@@ -33,33 +34,56 @@ func main() {
 	// Load environment variables
 	config.LoadEnv()
 	gin.SetMode(gin.DebugMode) // Ensure debug mode
+
 	// Initialize utils (including configuration)
 	utils.Init()
+
+	// Open or create log files
+	appLogFile, err := os.OpenFile("app.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		log.Fatal("Failed to open app log file:", err)
+	}
+	defer appLogFile.Close()
+
+	errorLogFile, err := os.OpenFile("error.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		log.Fatal("Failed to open error log file:", err)
+	}
+	defer errorLogFile.Close()
+
+	// Create separate loggers
+	appLogger := log.New(appLogFile, "APP: ", log.Ldate|log.Ltime|log.Lshortfile)
+	errorLogger := log.New(errorLogFile, "ERROR: ", log.Ldate|log.Ltime|log.Lshortfile)
+
+	// Redirect default log output to appLogger
+	log.SetOutput(appLogFile)
+	log.SetPrefix("APP: ")
+	log.SetFlags(log.Ldate | log.Ltime | log.Lshortfile)
+
+	// Test error logging
+	errorLogger.Println("This is a test error message") // Should appear in error.log
 
 	// Initialize database
 	db, err := utils.InitDB()
 	if err != nil {
-		log.Fatal("Failed to connect to database:", err)
+		errorLogger.Fatal("Failed to connect to database:", err)
 	}
 
 	// AutoMigrate models (only if ENABLE_AUTOMIGRATE is true)
-	log.Println("AutoMigration Status: ", os.Getenv("ENABLE_AUTOMIGRATE"))
+	appLogger.Println("AutoMigration Status: ", os.Getenv("ENABLE_AUTOMIGRATE"))
 
 	if os.Getenv("ENABLE_AUTOMIGRATE") == "true" {
-		log.Println("AutoMigrate is enabled. Running database migrations...")
+		appLogger.Println("AutoMigrate is enabled. Running database migrations...")
 		err = db.AutoMigrate(&models.User{}, &models.Role{}, &models.Permission{}, &models.Campaign{},
 			&models.SeederLog{}, &models.CampaignRecipient{}, &models.CampaignWorkflowProcessing{},
 			&models.CampaignWorkflowProcessing{}, &models.CampaignWorkflow{}, &models.CampaignWorkflowUser{},
 			&models.DND{}, &models.MNO{}, &models.MnoChannels{}, &models.MsgPriority{},
 		)
 		if err != nil {
-			log.Fatal("Failed to migrate database:", err)
+			errorLogger.Fatal("Failed to migrate database:", err)
 		}
-
-		// Seed initial data (only if not already seeded)
-		// seeders.SeedData()
 	} else {
-		log.Println("AutoMigrate is disabled. Skipping database migrations.")
+		appLogger.Println("AutoMigrate is disabled. Skipping database migrations.")
 	}
 
 	// Initialize Redis
@@ -72,58 +96,34 @@ func main() {
 	router.Use(middleware.Logger())
 	router.Use(middleware.CORS())
 	router.Use(middleware.RateLimiter(redisClient))
+	router.Use(ErrorLogger(errorLogger)) // Add error logging middleware with errorLogger
 
 	// Use the SetDBMiddleware to set the database connection in the context
 	router.Use(middleware.SetDBMiddleware(db))
 
 	// Swagger route (only if ENABLE_SWAGGER is true)
 	if os.Getenv("ENABLE_SWAGGER") == "true" {
-		log.Println("Swagger is enabled. Serving API documentation at /swagger/index.html")
+		appLogger.Println("Swagger is enabled. Serving API documentation at /swagger/index.html")
 		router.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 	} else {
-		log.Println("Swagger is disabled. API documentation will not be served.")
+		appLogger.Println("Swagger is disabled. API documentation will not be served.")
 	}
 
-	/*---------- RabbitMQ ---------*/
-	// Load RabbitMQ URLs from environment
+	// Initialize RabbitMQ
 	rabbitMQURLs := strings.Split(os.Getenv("RABBITMQ_URLS"), ",")
-	rabbitMQmanagementURL := os.Getenv("RABBITMQ_MANAGEMENT_URL") // Adjust if different
+	rabbitMQmanagementURL := os.Getenv("RABBITMQ_MANAGEMENT_URL")
 	rabbitMQusername := os.Getenv("RABBITMQ_USER")
 	rabbitMQpassword := os.Getenv("RABBITMQ_PASSWORD")
 
-	// Initialize RabbitMQ
 	rmq, err := rabbitmq.NewRabbitMQ(rabbitMQURLs, rabbitMQmanagementURL, rabbitMQusername, rabbitMQpassword)
 	if err != nil {
-		log.Fatalf("Failed to connect to RabbitMQ: %v", err)
+		errorLogger.Fatalf("Failed to connect to RabbitMQ: %v", err)
 	}
 	defer rmq.Close()
 
-	/* ------------- Declare Priority Queues ------------- *
-	// Declare priority queues
-	queues := []string{"general", "promotional", "transactional", "otp"}
-	for _, queue := range queues {
-		if err := rmq.DeclarePriorityQueue(queue); err != nil {
-			log.Fatalf("Failed to declare queue %s: %v", queue, err)
-		}
-	}
-	/* ------------- Declare Priority Queues ------------- */
-
-	/*------------- Example Publish -------------*
-	// Example: Publish messages with different priorities
-	err = rmq.PublishWithPriority("general", []byte(`{"message": "This is a general message"}`), 1)
-	if err != nil {
-		log.Printf("Failed to publish message: %v", err)
-	}
-
-	err = rmq.PublishWithPriority("otp", []byte(`{"message": "This is an OTP message"}`), 4)
-	if err != nil {
-		log.Printf("Failed to publish message: %v", err)
-	}
-	/*------------- Example Publish -------------*/
-	/*------------------ RabbitMQ ---------------*/
-
 	// Load Configuration
 	cfg := config.GetConfig()
+
 	// Initialize InfluxDB client
 	influxClient := influxdb2.NewClient(cfg.InfluxDBURL, cfg.InfluxDBToken)
 	defer influxClient.Close()
@@ -154,6 +154,22 @@ func main() {
 	if port == "" {
 		port = "8090"
 	}
-	log.Printf("Server starting on port %s", port)
+	appLogger.Printf("Server starting on port %s", port)
 	log.Fatal(router.Run(fmt.Sprintf(":%s", port)))
+}
+
+// ErrorLogger middleware to log errors and recover from panics
+func ErrorLogger(errorLogger *log.Logger) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		defer func() {
+			if err := recover(); err != nil {
+				errorLogger.Printf("Panic recovered: %v", err)
+				c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{
+					"error":   "Internal Server Error",
+					"details": fmt.Sprintf("%v", err),
+				})
+			}
+		}()
+		c.Next()
+	}
 }

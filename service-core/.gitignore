@@ -14,4 +14,7 @@ vendor/
 .vscode/
 .idea/
 
-/Backend-Core/tmp
+/service-core/tmp
+
+/app.log
+/error.log

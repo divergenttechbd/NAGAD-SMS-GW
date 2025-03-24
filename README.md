@@ -31,3 +31,8 @@ Frontend: Next.js
 
 # Clean Cache
 go clean -cache
+
+
+# Questions
+- Purging Mechanism?
+- 
