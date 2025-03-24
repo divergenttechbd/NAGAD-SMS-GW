@@ -6,208 +6,305 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"math/rand"
 	"os"
+	"os/signal"
 	"strings"
+	"sync/atomic"
+	"syscall"
 	"time"
 
+	"github.com/go-redis/redis/v8"
 	influxdb2 "github.com/influxdata/influxdb-client-go/v2"
+	"github.com/influxdata/influxdb-client-go/v2/api"
 	"github.com/joho/godotenv"
 	amqp "github.com/rabbitmq/amqp091-go"
 )
 
-// RabbitMQ represents a connection to a RabbitMQ cluster.
-type RabbitMQ struct {
-	conn    *amqp.Connection
-	channel *amqp.Channel
+const (
+	QueueName         = "general"
+	GlobalRateLimit   = 500
+	MaxWorkers        = 200
+	PrefetchCount     = 500
+	RedisLockTTL      = 30 * time.Second
+	RedisRateWindow   = 1 * time.Second
+	InfluxBatchSize   = 5000
+	HeartbeatInterval = 5 * time.Second
+	ReconnectDelay    = 5 * time.Second
+)
+
+var (
+	ctx               = context.Background()
+	influxFlushPeriod = 100 * time.Millisecond // Properly typed duration
+)
+
+type SafeConsumer struct {
+	instanceID   string
+	rabbitConn   *amqp.Connection
+	rabbitChan   *amqp.Channel
+	influxAPI    api.WriteAPI
+	redisClient  *redis.Client
+	successCount uint64
+	failureCount uint64
+	rateLimited  uint64
+	rabbitURLs   []string
 }
 
-// NewRabbitMQ creates a new RabbitMQ connection.
-func NewRabbitMQ(urls []string) (*RabbitMQ, error) {
-	if len(urls) == 0 {
-		return nil, errors.New("at least one RabbitMQ URL is required")
+func NewSafeConsumer() (*SafeConsumer, error) {
+	if err := godotenv.Load(); err != nil {
+		log.Printf("Warning loading .env: %v", err)
 	}
 
+	instanceID := os.Getenv("INSTANCE_ID")
+	if instanceID == "" {
+		return nil, errors.New("INSTANCE_ID must be set")
+	}
+
+	rabbitURLs := strings.Split(os.Getenv("RABBITMQ_URLS"), ",")
+	if len(rabbitURLs) == 0 || rabbitURLs[0] == "" {
+		return nil, errors.New("RABBITMQ_URLS must be set with at least one URL")
+	}
+
+	redisURL := os.Getenv("REDIS_URL")
+	if redisURL == "" {
+		return nil, errors.New("REDIS_URL must be set")
+	}
+
+	redisClient := redis.NewClient(&redis.Options{
+		Addr:     redisURL,
+		Password: os.Getenv("REDIS_PASSWORD"),
+		DB:       0,
+	})
+
+	influxURL := os.Getenv("INFLUXDB_URL")
+	influxToken := os.Getenv("INFLUXDB_TOKEN")
+	influxOrg := os.Getenv("INFLUXDB_ORG")
+	influxBucket := os.Getenv("INFLUXDB_BUCKET")
+	if influxURL == "" || influxToken == "" || influxOrg == "" || influxBucket == "" {
+		return nil, errors.New("INFLUXDB_URL, INFLUXDB_TOKEN, INFLUXDB_ORG, and INFLUXDB_BUCKET must be set")
+	}
+
+	influxClient := influxdb2.NewClientWithOptions(
+		influxURL,
+		influxToken,
+		influxdb2.DefaultOptions().
+			SetBatchSize(InfluxBatchSize).
+			SetFlushInterval(uint(influxFlushPeriod.Milliseconds())),
+	)
+	writeAPI := influxClient.WriteAPI(influxOrg, influxBucket)
+
+	// Connect to RabbitMQ cluster
+	conn, err := connectRabbitMQ(rabbitURLs)
+	if err != nil {
+		return nil, fmt.Errorf("RabbitMQ connection failed: %v", err)
+	}
+
+	ch, err := conn.Channel()
+	if err != nil {
+		conn.Close()
+		return nil, fmt.Errorf("Channel creation failed: %v", err)
+	}
+
+	if err := ch.Qos(PrefetchCount, 0, false); err != nil {
+		ch.Close()
+		conn.Close()
+		return nil, fmt.Errorf("Qos failed: %v", err)
+	}
+
+	return &SafeConsumer{
+		instanceID:  instanceID,
+		rabbitConn:  conn,
+		rabbitChan:  ch,
+		influxAPI:   writeAPI,
+		redisClient: redisClient,
+		rabbitURLs:  rabbitURLs,
+	}, nil
+}
+
+func connectRabbitMQ(urls []string) (*amqp.Connection, error) {
 	for _, url := range urls {
-		conn, err := amqp.Dial(url)
+		conn, err := amqp.DialConfig(url, amqp.Config{
+			Heartbeat: HeartbeatInterval,
+		})
 		if err == nil {
-			ch, err := conn.Channel()
-			if err != nil {
-				return nil, fmt.Errorf("failed to open channel: %v", err)
-			}
-
 			log.Printf("Connected to RabbitMQ at %s", url)
-			return &RabbitMQ{conn: conn, channel: ch}, nil
+			return conn, nil
 		}
-		log.Printf("Failed to connect to RabbitMQ at %s: %v", url, err)
+		log.Printf("Failed to connect to %s: %v", url, err)
 	}
-
 	return nil, errors.New("failed to connect to any RabbitMQ node")
 }
 
-// DeclareQueue ensures the general queue exists.
-func (r *RabbitMQ) DeclareQueue(queueName string) error {
-	_, err := r.channel.QueueDeclare(
-		queueName, // queue name
-		true,      // durable
-		false,     // auto-delete
-		false,     // exclusive
-		false,     // no-wait
-		nil,
-	)
+func (c *SafeConsumer) Close() {
+	if c.rabbitChan != nil {
+		c.rabbitChan.Close()
+	}
+	if c.rabbitConn != nil {
+		c.rabbitConn.Close()
+	}
+	if c.redisClient != nil {
+		c.redisClient.Close()
+	}
+	c.influxAPI.Flush()
+}
+
+func (c *SafeConsumer) acquireMessageLock(messageID string) (bool, error) {
+	return c.redisClient.SetNX(ctx, "lock:"+messageID, c.instanceID, RedisLockTTL).Result()
+}
+
+func (c *SafeConsumer) checkGlobalRateLimit() (bool, error) {
+	window := time.Now().Truncate(RedisRateWindow).Unix()
+	key := fmt.Sprintf("rate:%d", window)
+
+	count, err := c.redisClient.Incr(ctx, key).Result()
 	if err != nil {
-		return fmt.Errorf("failed to declare queue: %v", err)
+		return false, err
 	}
 
-	log.Printf("Declared queue: %s", queueName)
-	return nil
-}
-
-// ConsumeMessages starts consuming messages from the general queue.
-func (r *RabbitMQ) ConsumeMessages(queueName string, handler func([]byte) error) error {
-	msgs, err := r.channel.Consume(
-		queueName,
-		"",
-		false, // manual acknowledgment
-		false,
-		false,
-		false,
-		nil,
-	)
-	if err != nil {
-		return fmt.Errorf("failed to start consuming messages: %v", err)
+	if count == 1 {
+		c.redisClient.Expire(ctx, key, RedisRateWindow)
 	}
 
-	log.Printf("Listening for messages on queue: %s", queueName)
-	for msg := range msgs {
-		log.Printf("Received message: %s", msg.Body)
+	return count > GlobalRateLimit, nil
+}
 
-		err := handler(msg.Body)
-		if err != nil {
-			log.Printf("Processing failed: %v", err)
-			msg.Nack(false, true) // Requeue message on failure
-		} else {
-			msg.Ack(false) // Acknowledge message on success
-		}
+func (c *SafeConsumer) ProcessMessage(msg amqp.Delivery) {
+	locked, err := c.acquireMessageLock(msg.MessageId)
+	if err != nil || !locked {
+		msg.Nack(false, true)
+		return
 	}
-	return nil
-}
+	defer c.redisClient.Del(ctx, "lock:"+msg.MessageId)
 
-// Close closes the RabbitMQ connection.
-func (r *RabbitMQ) Close() {
-	if r.channel != nil {
-		r.channel.Close()
+	limited, err := c.checkGlobalRateLimit()
+	if err != nil || limited {
+		atomic.AddUint64(&c.rateLimited, 1)
+		msg.Ack(false)
+		return
 	}
-	if r.conn != nil {
-		r.conn.Close()
+
+	var message struct {
+		MsgID string `json:"msg_id"`
 	}
-	log.Println("RabbitMQ connection closed")
-}
+	if err := json.Unmarshal(msg.Body, &message); err != nil {
+		atomic.AddUint64(&c.failureCount, 1)
+		msg.Nack(false, true)
+		return
+	}
 
-// InfluxDB represents the database connection.
-type InfluxDB struct {
-	client influxdb2.Client
-	org    string
-	bucket string
-}
+	processingTime := time.Duration(50+rand.Intn(100)) * time.Millisecond
+	time.Sleep(processingTime)
 
-// NewInfluxDB initializes the InfluxDB client.
-func NewInfluxDB(url, token, org, bucket string) *InfluxDB {
-	client := influxdb2.NewClient(url, token)
-	return &InfluxDB{client: client, org: org, bucket: bucket}
-}
+	status := "delivered"
+	if rand.Float32() < 0.05 {
+		status = "failed"
+		atomic.AddUint64(&c.failureCount, 1)
+	} else {
+		atomic.AddUint64(&c.successCount, 1)
+	}
 
-// UpdateSMSStatus updates the SMS status in InfluxDB.
-func (db *InfluxDB) UpdateSMSStatus(msgID, status string) error {
-	writeAPI := db.client.WriteAPIBlocking(db.org, db.bucket)
-
-	point := influxdb2.NewPoint("sms_delivery",
+	point := influxdb2.NewPoint(
+		"sms_events",
 		map[string]string{
-			"msg_id": msgID,
+			"msg_id":   message.MsgID,
+			"instance": c.instanceID,
+			"status":   status,
 		},
 		map[string]interface{}{
-			"status": status,
+			"processing_time_ms": processingTime.Milliseconds(),
 		},
 		time.Now(),
 	)
+	c.influxAPI.WritePoint(point)
 
-	if err := writeAPI.WritePoint(context.Background(), point); err != nil {
-		return fmt.Errorf("failed to update InfluxDB: %v", err)
-	}
-
-	log.Printf("Updated msg_id %s to status %s in InfluxDB", msgID, status)
-	return nil
+	msg.Ack(false)
 }
 
-// MessageHandler processes messages and updates InfluxDB accordingly.
-func MessageHandler(db *InfluxDB) func([]byte) error {
-	return func(body []byte) error {
-		var message map[string]interface{}
-		if err := json.Unmarshal(body, &message); err != nil {
-			return fmt.Errorf("failed to unmarshal message: %v", err)
+func (c *SafeConsumer) Run() error {
+	go func() {
+		for err := range c.influxAPI.Errors() {
+			log.Printf("InfluxDB write error: %v", err)
 		}
+	}()
 
-		msgID, ok := message["msg_id"].(string)
-		if !ok || msgID == "" {
-			return errors.New("invalid msg_id in message")
-		}
-
-		log.Printf("Processing SMS message: %v", message)
-
-		// Simulate SMS sending
-		time.Sleep(1 * time.Second) // Simulating delay
-
-		// Simulate SMS delivery success or failure
-		if success := simulateSMSDelivery(); success {
-			db.UpdateSMSStatus(msgID, "successful")
-		} else {
-			db.UpdateSMSStatus(msgID, "failed")
-		}
-
-		return nil
+	msgs, err := c.rabbitChan.Consume(
+		QueueName,
+		"sms-consumer-"+c.instanceID,
+		false,
+		false,
+		false,
+		false,
+		nil,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to start consumer: %v", err)
 	}
-}
 
-// Simulate SMS delivery logic (Replace with actual API call)
-func simulateSMSDelivery() bool {
-	return time.Now().Unix()%2 == 0 // Random success/failure for testing
+	go func() {
+		ticker := time.NewTicker(5 * time.Second)
+		defer ticker.Stop()
+		for range ticker.C {
+			log.Printf("[%s] Stats - Success: %d, Failure: %d, RateLimited: %d",
+				c.instanceID,
+				atomic.LoadUint64(&c.successCount),
+				atomic.LoadUint64(&c.failureCount),
+				atomic.LoadUint64(&c.rateLimited),
+			)
+		}
+	}()
+
+	sem := make(chan struct{}, MaxWorkers)
+	sig := make(chan os.Signal, 1)
+	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
+
+	// Handle RabbitMQ connection closures
+	go func() {
+		<-c.rabbitConn.NotifyClose(make(chan *amqp.Error))
+		log.Printf("RabbitMQ connection closed, attempting to reconnect...")
+		for {
+			conn, err := connectRabbitMQ(c.rabbitURLs)
+			if err == nil {
+				c.rabbitConn = conn
+				ch, err := conn.Channel()
+				if err == nil {
+					c.rabbitChan = ch
+					if err := ch.Qos(PrefetchCount, 0, false); err == nil {
+						msgs, err = ch.Consume(QueueName, "sms-consumer-"+c.instanceID, false, false, false, false, nil)
+						if err == nil {
+							log.Printf("Reconnected and resumed consuming")
+							return
+						}
+					}
+				}
+			}
+			log.Printf("Reconnect failed: %v, retrying in %v", err, ReconnectDelay)
+			time.Sleep(ReconnectDelay)
+		}
+	}()
+
+	for {
+		select {
+		case msg := <-msgs:
+			sem <- struct{}{}
+			go func(m amqp.Delivery) {
+				defer func() { <-sem }()
+				c.ProcessMessage(m)
+			}(msg)
+		case <-sig:
+			log.Printf("[%s] Shutting down gracefully...", c.instanceID)
+			return nil
+		}
+	}
 }
 
 func main() {
-	// Load environment variables from .env file
-	if err := godotenv.Load(); err != nil {
-		log.Fatalf("Error loading .env file: %v", err)
-	}
-
-	// Access environment variables
-	rabbitMQURLs := strings.Split(os.Getenv("RABBITMQ_URLS"), ",")
-	if len(rabbitMQURLs) == 0 {
-		log.Fatal("RABBITMQ_URLS environment variable is not set")
-	}
-
-	influxDBURL := os.Getenv("INFLUXDB_URL")
-	influxDBToken := os.Getenv("INFLUXDB_TOKEN")
-	influxDBOrg := os.Getenv("INFLUXDB_ORG")
-	influxDBBucket := os.Getenv("INFLUXDB_BUCKET")
-
-	// Initialize RabbitMQ
-	rmq, err := NewRabbitMQ(rabbitMQURLs)
+	consumer, err := NewSafeConsumer()
 	if err != nil {
-		log.Fatalf("Failed to connect to RabbitMQ: %v", err)
+		log.Fatalf("Failed to initialize consumer: %v", err)
 	}
-	defer rmq.Close()
+	defer consumer.Close()
 
-	// Declare the general queue
-	queueName := "general"
-	// if err := rmq.DeclareQueue(queueName); err != nil {
-	// 	log.Fatalf("Failed to declare queue %s: %v", queueName, err)
-	// }
-
-	// Initialize InfluxDB
-	influxDB := NewInfluxDB(influxDBURL, influxDBToken, influxDBOrg, influxDBBucket)
-	defer influxDB.client.Close()
-
-	// Start consuming messages
-	if err := rmq.ConsumeMessages(queueName, MessageHandler(influxDB)); err != nil {
-		log.Fatalf("Failed to consume messages: %v", err)
+	if err := consumer.Run(); err != nil {
+		log.Fatalf("Consumer failed: %v", err)
 	}
 }
