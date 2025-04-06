@@ -23,7 +23,6 @@ import (
 
 const (
 	QueueName         = "general"
-	GlobalRateLimit   = 500
 	MaxWorkers        = 200
 	PrefetchCount     = 500
 	RedisLockTTL      = 30 * time.Second
@@ -33,9 +32,19 @@ const (
 	ReconnectDelay    = 5 * time.Second
 )
 
+// MNO-specific TPS limits (slightly lower than provided to be safe)
+var mnoTPSLimits = map[string]int{
+	"Robi":     1, // Provided: 2, Using: 1
+	"Gp":       2, // Provided: 3, Using: 2
+	"Airtel":   4, // Provided: 5, Using: 4
+	"Bl":       5, // Provided: 6, Using: 5
+	"Teletalk": 1, // Provided: 1, Using: 1 (no lower option, but safe)
+	"Tpgw":     1, // Provided: 1, Using: 1 (no lower option, but safe)
+}
+
 var (
 	ctx               = context.Background()
-	influxFlushPeriod = 100 * time.Millisecond // Properly typed duration
+	influxFlushPeriod = 100 * time.Millisecond
 )
 
 type SafeConsumer struct {
@@ -93,7 +102,6 @@ func NewSafeConsumer() (*SafeConsumer, error) {
 	)
 	writeAPI := influxClient.WriteAPI(influxOrg, influxBucket)
 
-	// Connect to RabbitMQ cluster
 	conn, err := connectRabbitMQ(rabbitURLs)
 	if err != nil {
 		return nil, fmt.Errorf("RabbitMQ connection failed: %v", err)
@@ -152,9 +160,14 @@ func (c *SafeConsumer) acquireMessageLock(messageID string) (bool, error) {
 	return c.redisClient.SetNX(ctx, "lock:"+messageID, c.instanceID, RedisLockTTL).Result()
 }
 
-func (c *SafeConsumer) checkGlobalRateLimit() (bool, error) {
+func (c *SafeConsumer) checkMNORateLimit(mno string) (bool, error) {
+	tpsLimit, ok := mnoTPSLimits[mno]
+	if !ok {
+		return true, fmt.Errorf("unknown MNO: %s", mno)
+	}
+
 	window := time.Now().Truncate(RedisRateWindow).Unix()
-	key := fmt.Sprintf("rate:%d", window)
+	key := fmt.Sprintf("rate:%s:%d", mno, window)
 
 	count, err := c.redisClient.Incr(ctx, key).Result()
 	if err != nil {
@@ -165,7 +178,14 @@ func (c *SafeConsumer) checkGlobalRateLimit() (bool, error) {
 		c.redisClient.Expire(ctx, key, RedisRateWindow)
 	}
 
-	return count > GlobalRateLimit, nil
+	return count > int64(tpsLimit), nil
+}
+
+func (c *SafeConsumer) submitToMNOAPI(mno, msgID string) error {
+	// Simulate API call (replace with actual HTTP call to MNO SMS API)
+	log.Printf("Submitting to %s SMS API for msg_id: %s", mno, msgID)
+	time.Sleep(50 * time.Millisecond) // Simulate network delay
+	return nil
 }
 
 func (c *SafeConsumer) ProcessMessage(msg amqp.Delivery) {
@@ -176,15 +196,9 @@ func (c *SafeConsumer) ProcessMessage(msg amqp.Delivery) {
 	}
 	defer c.redisClient.Del(ctx, "lock:"+msg.MessageId)
 
-	limited, err := c.checkGlobalRateLimit()
-	if err != nil || limited {
-		atomic.AddUint64(&c.rateLimited, 1)
-		msg.Ack(false)
-		return
-	}
-
 	var message struct {
 		MsgID string `json:"msg_id"`
+		MNO   string `json:"mno"`
 	}
 	if err := json.Unmarshal(msg.Body, &message); err != nil {
 		atomic.AddUint64(&c.failureCount, 1)
@@ -192,14 +206,38 @@ func (c *SafeConsumer) ProcessMessage(msg amqp.Delivery) {
 		return
 	}
 
+	if message.MNO == "" {
+		log.Printf("Message %s has no MNO specified", message.MsgID)
+		atomic.AddUint64(&c.failureCount, 1)
+		msg.Nack(false, true)
+		return
+	}
+
+	limited, err := c.checkMNORateLimit(message.MNO)
+	if err != nil {
+		log.Printf("Rate limit check failed for %s: %v", message.MNO, err)
+		atomic.AddUint64(&c.failureCount, 1)
+		msg.Nack(false, true)
+		return
+	}
+	if limited {
+		atomic.AddUint64(&c.rateLimited, 1)
+		msg.Ack(false)
+		return
+	}
+
 	processingTime := time.Duration(50+rand.Intn(100)) * time.Millisecond
 	time.Sleep(processingTime)
 
-	status := "delivered"
-	if rand.Float32() < 0.05 {
+	// Submit to MNO SMS API and set status
+	var status string
+	err = c.submitToMNOAPI(message.MNO, message.MsgID)
+	if err != nil {
 		status = "failed"
 		atomic.AddUint64(&c.failureCount, 1)
+		log.Printf("Failed to submit to %s API: %v", message.MNO, err)
 	} else {
+		status = "delivered"
 		atomic.AddUint64(&c.successCount, 1)
 	}
 
@@ -208,6 +246,7 @@ func (c *SafeConsumer) ProcessMessage(msg amqp.Delivery) {
 		map[string]string{
 			"msg_id":   message.MsgID,
 			"instance": c.instanceID,
+			"mno":      message.MNO,
 			"status":   status,
 		},
 		map[string]interface{}{
@@ -257,7 +296,6 @@ func (c *SafeConsumer) Run() error {
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
 
-	// Handle RabbitMQ connection closures
 	go func() {
 		<-c.rabbitConn.NotifyClose(make(chan *amqp.Error))
 		log.Printf("RabbitMQ connection closed, attempting to reconnect...")
