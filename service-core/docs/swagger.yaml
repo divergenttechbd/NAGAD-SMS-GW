@@ -23,6 +23,22 @@ definitions:
     - password
     - username
     type: object
+  controllers.SMSRequest:
+    properties:
+      msisdn:
+        example: "01712345678"
+        type: string
+      sms_text:
+        example: Hello, this is a test message
+        type: string
+    type: object
+  controllers.VerifyTokenRequest:
+    properties:
+      token:
+        type: string
+    required:
+    - token
+    type: object
   models.Campaign:
     description: Represents an SMS campaign associated with a user
     properties:
@@ -589,6 +605,48 @@ paths:
               type: string
             type: object
       summary: Register a new user
+      tags:
+      - auth
+  /auth/verify-token:
+    post:
+      consumes:
+      - application/json
+      description: Verify if a JWT token is valid
+      parameters:
+      - description: Token to verify
+        in: body
+        name: input
+        required: true
+        schema:
+          $ref: '#/definitions/controllers.VerifyTokenRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Returns whether the token is valid
+          schema:
+            additionalProperties:
+              type: boolean
+            type: object
+        "400":
+          description: Invalid input
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Invalid token
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal server error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Verify a JWT token
       tags:
       - auth
   /campaign-recipient:
@@ -1592,6 +1650,76 @@ paths:
       summary: Update an existing SMS priority configuration
       tags:
       - SMS Priority
+  /sms/publish-million:
+    post:
+      description: Publishes 1 million messages to a specified RabbitMQ queue with
+        priority and logs them in InfluxDB
+      parameters:
+      - default: general
+        description: Queue name (e.g., general, otp)
+        in: query
+        name: queueName
+        required: true
+        type: string
+      - default: 1
+        description: Priority level (0-4)
+        in: query
+        name: priority
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Messages published successfully
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Failed to publish messages
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Publish 1 million test SMS messages
+      tags:
+      - SMS Gateway
+  /sms/send:
+    post:
+      consumes:
+      - application/json
+      description: Receives an SMS text and MSISDN, determines the carrier, queues
+        the message, and logs it in InfluxDB
+      parameters:
+      - description: SMS request payload
+        in: body
+        name: smsRequest
+        required: true
+        schema:
+          $ref: '#/definitions/controllers.SMSRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: SMS received and queued
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Invalid request format or carrier prefix
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Failed to write to InfluxDB
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Send an SMS message
+      tags:
+      - SMS Gateway
 securityDefinitions:
   BearerAuth:
     in: header

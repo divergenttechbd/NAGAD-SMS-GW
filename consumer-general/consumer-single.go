@@ -242,7 +242,7 @@ func (c *SafeConsumer) ProcessMessage(msg amqp.Delivery) {
 	}
 
 	point := influxdb2.NewPoint(
-		"sms_events",
+		"final_sms_delivery",
 		map[string]string{
 			"msg_id":   message.MsgID,
 			"instance": c.instanceID,

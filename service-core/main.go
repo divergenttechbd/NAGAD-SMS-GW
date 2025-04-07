@@ -87,15 +87,17 @@ func main() {
 	}
 
 	// Initialize Redis
-	redisClient := utils.InitRedis()
+	// redisClient := utils.InitRedis()
 
 	// Initialize Gin router
 	router := gin.Default()
+	router.Use(gin.Recovery())
+	// router.SetTrustedProxies([]string{"127.0.0.1"})
 
 	// Middleware
 	router.Use(middleware.Logger())
 	router.Use(middleware.CORS())
-	router.Use(middleware.RateLimiter(redisClient))
+	// router.Use(middleware.RateLimiter(redisClient))
 	router.Use(ErrorLogger(errorLogger)) // Add error logging middleware with errorLogger
 
 	// Use the SetDBMiddleware to set the database connection in the context

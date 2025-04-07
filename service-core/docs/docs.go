@@ -356,6 +356,70 @@ const docTemplate = `{
                 }
             }
         },
+        "/auth/verify-token": {
+            "post": {
+                "description": "Verify if a JWT token is valid",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "auth"
+                ],
+                "summary": "Verify a JWT token",
+                "parameters": [
+                    {
+                        "description": "Token to verify",
+                        "name": "input",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/controllers.VerifyTokenRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Returns whether the token is valid",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "boolean"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid input",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Invalid token",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/campaign-recipient": {
             "post": {
                 "description": "Create a new campaign recipient with campaign ID, recipient ID, and status",
@@ -1819,6 +1883,107 @@ const docTemplate = `{
                     }
                 }
             }
+        },
+        "/sms/publish-million": {
+            "post": {
+                "description": "Publishes 1 million messages to a specified RabbitMQ queue with priority and logs them in InfluxDB",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "SMS Gateway"
+                ],
+                "summary": "Publish 1 million test SMS messages",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "default": "general",
+                        "description": "Queue name (e.g., general, otp)",
+                        "name": "queueName",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "default": 1,
+                        "description": "Priority level (0-4)",
+                        "name": "priority",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Messages published successfully",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "500": {
+                        "description": "Failed to publish messages",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/sms/send": {
+            "post": {
+                "description": "Receives an SMS text and MSISDN, determines the carrier, queues the message, and logs it in InfluxDB",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "SMS Gateway"
+                ],
+                "summary": "Send an SMS message",
+                "parameters": [
+                    {
+                        "description": "SMS request payload",
+                        "name": "smsRequest",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/controllers.SMSRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "SMS received and queued",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request format or carrier prefix",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Failed to write to InfluxDB",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
         }
     },
     "definitions": {
@@ -1853,6 +2018,30 @@ const docTemplate = `{
                     "minLength": 8
                 },
                 "username": {
+                    "type": "string"
+                }
+            }
+        },
+        "controllers.SMSRequest": {
+            "type": "object",
+            "properties": {
+                "msisdn": {
+                    "type": "string",
+                    "example": "01712345678"
+                },
+                "sms_text": {
+                    "type": "string",
+                    "example": "Hello, this is a test message"
+                }
+            }
+        },
+        "controllers.VerifyTokenRequest": {
+            "type": "object",
+            "required": [
+                "token"
+            ],
+            "properties": {
+                "token": {
                     "type": "string"
                 }
             }
